@@ -245,7 +245,7 @@ def format_messages(slot_name):
     m += "\n━━━━━━━━━━━━━━━━━━━━\n"
     for line in slot["footer_lines"]:
         m += "✅ _" + e(line) + "_\n"
-    m += "\n🛍 _Affiliate links \\- you pay same price, we earn small commission\\. Thanks_ 🙏"
+    m += "\n🛍 _Affiliate links \\- Share it with other deal hunters <Sharing is Saving>\\. Thanks_ 🙏"
 
     messages.append(m)
     return messages
@@ -286,7 +286,7 @@ def save_whatsapp_file(slot_name):
     content += "━━━━━━━━━━━━━━━━━━━━\n"
     for line in slot["footer_lines"]:
         content += "✅ " + line + "\n"
-    content += "\nAffiliate links - you pay same price, we earn small commission. Thanks 🙏"
+    content += "\nAffiliate links - Share it with other deal hunters <Sharing is Saving>. Thanks 🙏"
 
     with open(wa_file, "w", encoding="utf-8") as f:
         f.write(content)
