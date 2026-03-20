@@ -1,25 +1,59 @@
-name: Daily Deal Hunter
+name: Daily Deal Hunter - 4 Posts
 
 on:
   schedule:
-    - cron: '30 3 * * *'
+    - cron: '30 3 * * *'   # 9:00 AM IST  - Morning
+    - cron: '30 7 * * *'   # 1:00 PM IST  - Afternoon
+    - cron: '30 11 * * *'  # 5:00 PM IST  - Evening
+    - cron: '30 15 * * *'  # 9:00 PM IST  - Night
   workflow_dispatch:
+    inputs:
+      slot:
+        description: 'Time slot to run'
+        required: true
+        default: 'morning'
+        type: choice
+        options:
+          - morning
+          - afternoon
+          - evening
+          - night
 
 jobs:
   run-agent:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+
       - name: Install dependencies
         run: pip install -r requirements.txt
+
+      - name: Determine time slot
+        id: slot
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "slot=${{ github.event.inputs.slot }}" >> $GITHUB_OUTPUT
+          else
+            HOUR=$(date -u +%H)
+            if [ "$HOUR" = "03" ]; then
+              echo "slot=morning" >> $GITHUB_OUTPUT
+            elif [ "$HOUR" = "07" ]; then
+              echo "slot=afternoon" >> $GITHUB_OUTPUT
+            elif [ "$HOUR" = "11" ]; then
+              echo "slot=evening" >> $GITHUB_OUTPUT
+            else
+              echo "slot=night" >> $GITHUB_OUTPUT
+            fi
+          fi
+
       - name: Run Deal Hunter
-        run: python deals_agent.py
+        run: python deals_agent.py ${{ steps.slot.outputs.slot }}
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           AMAZON_AFFILIATE_TAG: ${{ secrets.AMAZON_AFFILIATE_TAG }}
-          WA_ACCESS_TOKEN: ${{ secrets.WA_ACCESS_TOKEN }}
