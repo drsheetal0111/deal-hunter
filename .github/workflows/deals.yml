@@ -2,10 +2,10 @@ name: Daily Deal Hunter - 4 Posts
 
 on:
   schedule:
-    - cron: '30 3 * * *'   # 9:00 AM IST  - Morning
-    - cron: '30 7 * * *'   # 1:00 PM IST  - Afternoon
-    - cron: '30 11 * * *'  # 5:00 PM IST  - Evening
-    - cron: '30 15 * * *'  # 9:00 PM IST  - Night
+    - cron: '30 3 * * *'
+    - cron: '30 7 * * *'
+    - cron: '30 11 * * *'
+    - cron: '30 15 * * *'
   workflow_dispatch:
     inputs:
       slot:
@@ -24,15 +24,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-
       - name: Install dependencies
         run: pip install -r requirements.txt
-
       - name: Determine time slot
         id: slot
         run: |
@@ -50,7 +47,6 @@ jobs:
               echo "slot=night" >> $GITHUB_OUTPUT
             fi
           fi
-
       - name: Run Deal Hunter
         run: python deals_agent.py ${{ steps.slot.outputs.slot }}
         env:
