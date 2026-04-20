@@ -1,0 +1,44 @@
+[
+  {
+    "board_id": "FILL_AFTER_PINTEREST_APPROVAL",
+    "board_name": "Skincare India",
+    "category": "skincare",
+    "keywords": ["face pack", "serum", "moisturizer", "glow", "natural"]
+  },
+  {
+    "board_id": "FILL_AFTER_PINTEREST_APPROVAL",
+    "board_name": "Natural Beauty Finds",
+    "category": "skincare",
+    "keywords": ["organic", "herbal", "natural beauty", "DIY skincare"]
+  },
+  {
+    "board_id": "FILL_AFTER_PINTEREST_APPROVAL",
+    "board_name": "Kitchen Essentials India",
+    "category": "kitchen",
+    "keywords": ["kitchen", "cookware", "tiffin", "storage", "utensils"]
+  },
+  {
+    "board_id": "FILL_AFTER_PINTEREST_APPROVAL",
+    "board_name": "Home Organisation",
+    "category": "kitchen",
+    "keywords": ["home", "organiser", "storage", "cleaning", "decor"]
+  },
+  {
+    "board_id": "FILL_AFTER_PINTEREST_APPROVAL",
+    "board_name": "Health & Wellness India",
+    "category": "health",
+    "keywords": ["health", "wellness", "vitamins", "organic", "immunity"]
+  },
+  {
+    "board_id": "FILL_AFTER_PINTEREST_APPROVAL",
+    "board_name": "Women Fashion India",
+    "category": "fashion",
+    "keywords": ["fashion", "saree", "kurti", "ethnic", "women"]
+  },
+  {
+    "board_id": "FILL_AFTER_PINTEREST_APPROVAL",
+    "board_name": "Spiritual Living",
+    "category": "spirituality",
+    "keywords": ["spiritual", "pooja", "meditation", "yoga", "mandir"]
+  }
+]
