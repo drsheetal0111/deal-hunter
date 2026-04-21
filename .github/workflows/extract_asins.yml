@@ -1,7 +1,7 @@
 name: Amazon ASIN Extractor
 
 on:
-  workflow_dispatch:           # Manual trigger only
+  workflow_dispatch:
     inputs:
       test_mode:
         description: 'Run in test mode? (true = 3 products/category, false = 10 products/category)'
@@ -40,7 +40,7 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: extraction-results
           path: |
