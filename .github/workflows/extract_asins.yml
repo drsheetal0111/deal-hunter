@@ -1,1 +1,49 @@
+name: Amazon ASIN Extractor
 
+on:
+  workflow_dispatch:           # Manual trigger only
+    inputs:
+      test_mode:
+        description: 'Run in test mode? (true = 3 products/category, false = 10 products/category)'
+        required: true
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install requests beautifulsoup4 gspread google-auth
+
+      - name: Run ASIN extractor
+        env:
+          TEST_MODE: ${{ github.event.inputs.test_mode }}
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+          GOOGLE_SHEETS_CREDENTIALS: ${{ secrets.GOOGLE_SHEETS_CREDENTIALS }}
+        run: |
+          cd pinterest_bot
+          python extract_asins.py
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: extraction-results
+          path: |
+            pinterest_bot/test_results.json
+            pinterest_bot/products_extracted.json
+          retention-days: 7
