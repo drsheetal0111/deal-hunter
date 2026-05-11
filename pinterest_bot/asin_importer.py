@@ -210,10 +210,17 @@ def extract_products_from_html(html):
             img = img.split('._')[0] + '.jpg' if '._' in img else img
             img = img.replace('\\/', '/')
             products[asin]['image'] = img
-
+# Fallback: construct image URL from ASIN for any missing images
+for asin in products:
+    if not products[asin]['image']:
+        products[asin]['image'] = (
+            f"https://ws-in.amazon-adsystem.com/widgets/q"
+            f"?_encoding=UTF8&ASIN={asin}&Format=_SL250_"
+            f"&ID=AsinImage&MarketPlace=IN"
+            f"&ServiceVersion=20070822&WS=1"
+            f"&tag=pulras0631-21"
+        )
     return list(products.values())
-
-
 # ─── BOARD ROUTER ─────────────────────────────────────────────────────────────
 def assign_board(title, keywords_str):
     """Assign product to correct Pinterest board."""
