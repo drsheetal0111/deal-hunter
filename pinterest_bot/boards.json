@@ -1,44 +1,62 @@
 [
   {
-    "board_id": "FILL_AFTER_PINTEREST_APPROVAL",
-    "board_name": "Skincare India",
-    "category": "skincare",
-    "keywords": ["face pack", "serum", "moisturizer", "glow", "natural"]
-  },
-  {
-    "board_id": "FILL_AFTER_PINTEREST_APPROVAL",
-    "board_name": "Natural Beauty Finds",
-    "category": "skincare",
-    "keywords": ["organic", "herbal", "natural beauty", "DIY skincare"]
-  },
-  {
-    "board_id": "FILL_AFTER_PINTEREST_APPROVAL",
-    "board_name": "Kitchen Essentials India",
-    "category": "kitchen",
-    "keywords": ["kitchen", "cookware", "tiffin", "storage", "utensils"]
-  },
-  {
-    "board_id": "FILL_AFTER_PINTEREST_APPROVAL",
-    "board_name": "Home Organisation",
-    "category": "kitchen",
-    "keywords": ["home", "organiser", "storage", "cleaning", "decor"]
-  },
-  {
-    "board_id": "FILL_AFTER_PINTEREST_APPROVAL",
-    "board_name": "Health & Wellness India",
-    "category": "health",
-    "keywords": ["health", "wellness", "vitamins", "organic", "immunity"]
-  },
-  {
-    "board_id": "FILL_AFTER_PINTEREST_APPROVAL",
-    "board_name": "Women Fashion India",
+    "board_id": "PENDING",
+    "board_name": "Fashion",
+    "board_slug": "fashion",
     "category": "fashion",
-    "keywords": ["fashion", "saree", "kurti", "ethnic", "women"]
+    "sub_categories": ["clothing", "footwear", "bags"],
+    "keywords": ["fashion", "women fashion", "india fashion", "outfit", "style"],
+    "active": true,
+    "notes": "Default fashion board — catches all general fashion products"
   },
   {
-    "board_id": "FILL_AFTER_PINTEREST_APPROVAL",
-    "board_name": "Spiritual Living",
-    "category": "spirituality",
-    "keywords": ["spiritual", "pooja", "meditation", "yoga", "mandir"]
+    "board_id": "PENDING",
+    "board_name": "Jewelry Aesthetic",
+    "board_slug": "jewelry-aesthetic",
+    "category": "fashion",
+    "sub_categories": ["jewelry", "accessories"],
+    "keywords": ["jewelry", "jewellery", "earrings", "necklace", "bangles", "kundan"],
+    "active": true,
+    "notes": "All jewelry and accessories"
+  },
+  {
+    "board_id": "PENDING",
+    "board_name": "Saree Look Ideas",
+    "board_slug": "saree-look-ideas",
+    "category": "fashion",
+    "sub_categories": ["sarees"],
+    "keywords": ["saree", "sari", "chanderi", "banarasi", "silk saree", "blouse"],
+    "active": true,
+    "notes": "All saree styles and blouse designs"
+  },
+  {
+    "board_id": "PENDING",
+    "board_name": "Ethnic Outfits",
+    "board_slug": "ethnic-outfits",
+    "category": "fashion",
+    "sub_categories": ["ethnic_wear"],
+    "keywords": ["kurti", "kurta", "lehenga", "salwar", "anarkali", "ethnic", "sharara"],
+    "active": true,
+    "notes": "Ethnic wear — kurtis, lehengas, salwar suits"
+  },
+  {
+    "board_id": "PENDING",
+    "board_name": "Under \u20b9999 Fashion",
+    "board_slug": "under-999-fashion",
+    "category": "fashion",
+    "sub_categories": ["budget_fashion"],
+    "keywords": ["under 999", "affordable", "budget fashion", "value", "cheap"],
+    "active": true,
+    "notes": "Budget fashion — products priced under Rs 999"
+  },
+  {
+    "board_id": "PENDING",
+    "board_name": "Daily Wear Outfit Ideas",
+    "board_slug": "daily-wear-outfit-ideas",
+    "category": "fashion",
+    "sub_categories": ["clothing", "casual"],
+    "keywords": ["daily wear", "casual", "everyday", "cotton", "comfortable", "western"],
+    "active": true,
+    "notes": "Everyday casual and western wear"
   }
 ]
