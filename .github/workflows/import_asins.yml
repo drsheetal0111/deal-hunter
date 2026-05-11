@@ -1,1 +1,63 @@
+name: Weekly ASIN Importer
 
+on:
+  workflow_dispatch:           # Manual trigger
+    inputs:
+      dry_run:
+        description: 'Dry run? (true = preview only, false = write to sheet)'
+        required: true
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install gspread google-auth
+
+      - name: Run ASIN importer
+        env:
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+          GOOGLE_SHEETS_CREDENTIALS: ${{ secrets.GOOGLE_SHEETS_CREDENTIALS }}
+          AMAZON_AFFILIATE_TAG: ${{ secrets.AMAZON_AFFILIATE_TAG }}
+          DRY_RUN: ${{ github.event.inputs.dry_run }}
+        run: |
+          cd pinterest_bot
+          
+          # Check if page_source.html was committed
+          if [ ! -f page_source.html ]; then
+            echo "❌ page_source.html not found in pinterest_bot/ folder"
+            echo "Please paste your Amazon page source into pinterest_bot/page_source.html and commit"
+            exit 1
+          fi
+          
+          # Run importer
+          if [ "$DRY_RUN" = "true" ]; then
+            python asin_importer.py --source page_source.html --dry-run
+          else
+            python asin_importer.py --source page_source.html
+          fi
+
+      - name: Upload import log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: import-results
+          path: |
+            pinterest_bot/import_*.csv
+            pinterest_bot/dry_run_*.csv
+          retention-days: 30
