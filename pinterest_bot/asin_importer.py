@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 """
-Amazon Page Source → Google Sheets Auto-Importer v2
+Amazon Page Source → Google Sheets Auto-Importer v3
 ====================================================
-NEW in v2:
-- Auto-extracts image URLs from page source
-- Auto-assigns board_name based on category/keywords
-- Fills Column I (image_url) and Column J (board_name)
-- No manual image URL work needed
+v3 fixes:
+- Better image extraction for bestsellers pages
+- Better title extraction for bestsellers pages  
+- Improved board routing
 """
 
 import re
@@ -15,277 +14,263 @@ import sys
 import json
 import argparse
 from datetime import datetime
+from collections import Counter
 
 # ─── BOARD ROUTING RULES ──────────────────────────────────────────────────────
-# Order matters — first match wins
 BOARD_ROUTING = [
     {
         "board": "Jewelry Aesthetic",
         "keywords": ["jewelry", "jewellery", "necklace", "earring",
                      "bracelet", "bangle", "ring", "pendant", "chain",
-                     "maang tikka", "jhumka", "choker", "haar"]
+                     "maang tikka", "jhumka", "choker", "haar", "kundan",
+                     "oxidised", "gold plated", "silver jewel"]
     },
     {
         "board": "Saree Look Ideas",
         "keywords": ["saree", "sari", "chanderi", "banarasi", "kanjivaram",
                      "silk saree", "cotton saree", "georgette saree",
-                     "chiffon saree", "printed saree", "embroidered saree",
-                     "blouse", "saree blouse"]
+                     "chiffon saree", "printed saree", "woven saree",
+                     "blouse", "saree blouse", "patola", "pochampally"]
     },
     {
         "board": "Ethnic Outfits",
         "keywords": ["kurti", "kurta", "lehenga", "salwar", "anarkali",
                      "sharara", "palazzo", "churidar", "dupatta",
-                     "ethnic", "indo western", "festive wear",
-                     "traditional", "embroidered", "printed kurti"]
+                     "ethnic", "indo western", "festive", "traditional",
+                     "embroidered", "printed kurti", "phulkari",
+                     "mirror work", "block print"]
     },
     {
         "board": "Daily Wear Outfit Ideas",
         "keywords": ["shirt", "top", "co-ord", "coord set", "nighty",
                      "casual", "dress", "tshirt", "t-shirt", "jeans",
-                     "shorts", "nightwear", "loungewear", "everyday",
-                     "comfortable", "western wear", "cotton top"]
+                     "shorts", "nightwear", "loungewear", "western",
+                     "cotton top", "tank top", "blouse top", "tunic"]
     },
     {
         "board": "Under \u20b9999 Fashion",
         "price_keywords": ["under 999", "under 500", "under 799",
-                           "budget", "affordable", "value"],
-        "price_threshold": 999,  # will try to extract price from title
-        "keywords": []  # fallback only — price logic takes priority
+                           "below 999", "budget", "affordable"],
+        "price_threshold": 999,
+        "keywords": []
     },
     {
         "board": "Fashion",
         "keywords": ["fashion", "women", "men", "shoes", "footwear",
                      "bag", "handbag", "luggage", "accessories",
-                     "clothing", "apparel", "wear"],
-        "default": True  # catches everything else
+                     "clothing", "apparel", "wear", "outfit"],
+        "default": True
     }
 ]
 
-# ─── CATEGORY RULES ───────────────────────────────────────────────────────────
 CATEGORY_RULES = [
-    (['saree', 'sari', 'chanderi', 'banarasi', 'dupatta'],
+    (['saree', 'sari', 'chanderi', 'banarasi', 'dupatta', 'blouse'],
      'fashion', 'sarees'),
     (['kurti', 'kurta', 'lehenga', 'salwar', 'anarkali', 'sharara',
-      'palazzo', 'ethnic'],
+      'palazzo', 'ethnic', 'phulkari'],
      'fashion', 'ethnic_wear'),
     (['jewelry', 'jewellery', 'necklace', 'earring', 'bracelet',
-      'bangle', 'ring', 'jhumka'],
+      'bangle', 'ring', 'jhumka', 'kundan'],
      'fashion', 'jewelry'),
     (['shoes', 'sandals', 'heels', 'sneakers', 'footwear', 'loafers'],
      'fashion', 'footwear'),
     (['bag', 'handbag', 'luggage', 'suitcase', 'backpack', 'trolley'],
      'fashion', 'bags'),
     (['shirt', 'tshirt', 't-shirt', 'top', 'dress', 'nighty',
-      'co-ord', 'jeans', 'shorts', 'jacket'],
+      'co-ord', 'jeans', 'shorts', 'jacket', 'tunic'],
      'fashion', 'clothing'),
-    (['face pack', 'skincare', 'serum', 'moisturizer', 'sunscreen',
-      'makeup', 'lipstick', 'foundation', 'moringa', 'multani'],
-     'skincare', 'beauty_care'),
 ]
 
 AFFILIATE_TAG = os.environ.get('AMAZON_AFFILIATE_TAG', 'pulras0631-21')
 
 
-# ─── IMAGE URL EXTRACTOR ──────────────────────────────────────────────────────
-def extract_image_for_asin(html_content, asin):
-    """Try multiple patterns to find the best image URL for an ASIN."""
+# ─── IMPROVED EXTRACTOR ───────────────────────────────────────────────────────
+def extract_products_from_html(html):
+    """
+    Extract ASIN + title + image from Amazon bestsellers/search pages.
+    Uses multiple strategies optimized for different page types.
+    """
+    products = {}
 
-    image_url = ''
+    # ── Strategy 1: JSON data blobs (most reliable) ──
+    # Amazon embeds product data as JSON in script tags
+    json_patterns = [
+        # Bestsellers grid data
+        re.compile(
+            r'"asin"\s*:\s*"([B][A-Z0-9]{9})"'
+            r'(?:[^}]{0,500}?"title"\s*:\s*"([^"]{5,150})")?'
+            r'(?:[^}]{0,500}?"imageUrl"\s*:\s*"([^"]+)")?',
+            re.IGNORECASE | re.DOTALL
+        ),
+        # Search results data
+        re.compile(
+            r'"ASIN"\s*:\s*"([B][A-Z0-9]{9})"'
+            r'(?:[^}]{0,500}?"title"\s*:\s*"([^"]{5,150})")?'
+            r'(?:[^}]{0,500}?"image"\s*:\s*"([^"]+)")?',
+            re.IGNORECASE | re.DOTALL
+        ),
+    ]
 
-    # Pattern 1: data-csa-c-item-id near src image (deals grid)
-    p1 = re.compile(
-        rf'amzn1\.asin\.{asin}[^"]*"[^>]*>.*?'
-        rf'<img[^>]*src="(https://m\.media-amazon\.com/images/I/[^"]+)"',
+    for pattern in json_patterns:
+        for m in pattern.finditer(html):
+            asin = m.group(1).upper()
+            title = m.group(2).strip() if m.group(2) else ''
+            image = m.group(3) if m.group(3) else ''
+            if asin not in products:
+                products[asin] = {'asin': asin, 'title': title, 'image': image}
+            else:
+                if not products[asin]['title'] and title:
+                    products[asin]['title'] = title
+                if not products[asin]['image'] and image:
+                    products[asin]['image'] = image
+
+    # ── Strategy 2: HTML img tags with data-asin ──
+    # <div data-asin="B0XXX"><img src="https://...">
+    s2 = re.compile(
+        r'data-asin="([B][A-Z0-9]{9})"'
+        r'(?:[^>]{0,200}?>|.{0,500}?)<img[^>]*'
+        r'src="(https://m\.media-amazon\.com/images/I/[^"]+)"'
+        r'(?:[^>]*alt="([^"]{5,150})")?',
         re.IGNORECASE | re.DOTALL
     )
-    m = p1.search(html_content[:300000])
-    if m:
-        image_url = m.group(1)
+    for m in s2.finditer(html[:500000]):
+        asin = m.group(1).upper()
+        image = m.group(2)
+        title = m.group(3).strip() if m.group(3) else ''
+        if asin not in products:
+            products[asin] = {'asin': asin, 'title': title, 'image': image}
+        else:
+            if not products[asin]['image'] and image:
+                products[asin]['image'] = image
+            if not products[asin]['title'] and title:
+                products[asin]['title'] = title
 
-    # Pattern 2: /dp/ASIN followed by image src nearby
-    if not image_url:
-        p2 = re.compile(
-            rf'/dp/{asin}[^"]*"[^>]*>.*?'
-            rf'src="(https://m\.media-amazon\.com/images/I/[^"]+)"',
-            re.IGNORECASE | re.DOTALL
-        )
-        m = p2.search(html_content[:300000])
-        if m:
-            image_url = m.group(1)
-
-    # Pattern 3: data-asin attribute near image
-    if not image_url:
-        p3 = re.compile(
-            rf'data-asin="{asin}"[^>]*>.*?'
-            rf'src="(https://m\.media-amazon\.com/images/I/[^"]+)"',
-            re.IGNORECASE | re.DOTALL
-        )
-        m = p3.search(html_content[:300000])
-        if m:
-            image_url = m.group(1)
-
-    # Pattern 4: JSON blob with ASIN and hiRes/large image
-    if not image_url:
-        p4 = re.compile(
-            rf'"{asin}".*?"(https://m\.media-amazon\.com/images/I/[^"]+)"',
-            re.IGNORECASE | re.DOTALL
-        )
-        m = p4.search(html_content[:200000])
-        if m:
-            image_url = m.group(1)
-
-    # Clean up image URL — get highest quality version
-    if image_url:
-        # Remove size constraints to get full quality image
-        image_url = re.sub(r'\._[A-Z]{2}_[^.]*\.', '.', image_url)
-        # Ensure it ends with image extension
-        if not image_url.endswith(('.jpg', '.png', '.jpeg')):
-            image_url = image_url.split('.jpg')[0] + '.jpg'
-
-    return image_url
-
-
-# ─── TITLE EXTRACTOR ──────────────────────────────────────────────────────────
-def extract_title_for_asin(html_content, asin):
-    """Extract product title for a given ASIN."""
-    title = ''
-
-    # Pattern 1: alt text near product link
-    p1 = re.compile(
-        rf'/dp/{asin}[^"]*"[^>]*alt="([^"]{10,150})"',
-        re.IGNORECASE
+    # ── Strategy 3: /dp/ASIN links with nearby img ──
+    s3 = re.compile(
+        r'/dp/([B][A-Z0-9]{9})[^"]*"[^>]*>'
+        r'(?:.{0,300}?)'
+        r'<img[^>]*src="(https://m\.media-amazon\.com/images/I/[^"]+)"'
+        r'(?:[^>]*alt="([^"]{5,150})")?',
+        re.IGNORECASE | re.DOTALL
     )
-    m = p1.search(html_content)
-    if m:
+    for m in s3.finditer(html[:600000]):
+        asin = m.group(1).upper()
+        image = m.group(2)
+        title = m.group(3).strip() if m.group(3) else ''
+        if asin not in products:
+            products[asin] = {'asin': asin, 'title': title, 'image': image}
+        else:
+            if not products[asin]['image'] and image:
+                products[asin]['image'] = image
+            if not products[asin]['title'] and title:
+                products[asin]['title'] = title
+
+    # ── Strategy 4: alt text near ASIN links ──
+    s4 = re.compile(
+        r'alt="([^"]{10,150})"[^>]*>[^<]*</[^>]+>'
+        r'(?:.{0,100}?)/dp/([B][A-Z0-9]{9})',
+        re.IGNORECASE | re.DOTALL
+    )
+    for m in s4.finditer(html[:600000]):
         title = m.group(1).strip()
+        asin = m.group(2).upper()
+        if asin in products and not products[asin]['title']:
+            products[asin]['title'] = title
 
-    # Pattern 2: title attribute
-    if not title:
-        p2 = re.compile(
-            rf'/dp/{asin}[^"]*"[^>]*title="([^"]{10,150})"',
-            re.IGNORECASE
-        )
-        m = p2.search(html_content)
-        if m:
-            title = m.group(1).strip()
+    # ── Strategy 5: srcset images (bestsellers uses these) ──
+    s5 = re.compile(
+        r'/dp/([B][A-Z0-9]{9})'
+        r'(?:.{0,500}?)'
+        r'srcset="(https://m\.media-amazon\.com/images/I/[^"]+)',
+        re.IGNORECASE | re.DOTALL
+    )
+    for m in s5.finditer(html[:600000]):
+        asin = m.group(1).upper()
+        image = m.group(2).split(' ')[0]  # take first URL from srcset
+        if asin in products and not products[asin]['image']:
+            products[asin]['image'] = image
 
-    # Pattern 3: JSON "title" field near ASIN
-    if not title:
-        p3 = re.compile(
-            rf'"{asin}".*?"title"\s*:\s*"([^"]{10,150})"',
-            re.IGNORECASE | re.DOTALL
-        )
-        m = p3.search(html_content[:300000])
-        if m:
-            title = m.group(1).strip()
-
-    return title[:100] if title else ''
-
-
-# ─── ASIN EXTRACTOR ───────────────────────────────────────────────────────────
-def extract_asins_from_html(html_content):
-    """Extract all ASINs from Amazon page source."""
-    asins = set()
-
-    patterns = [
-        re.compile(r'data-csa-c-item-id="amzn1\.asin\.([A-Z0-9]{10})',
-                   re.IGNORECASE),
+    # ── Strategy 6: catch remaining ASINs ──
+    all_asin_patterns = [
         re.compile(r'data-asin="([B][A-Z0-9]{9})"', re.IGNORECASE),
         re.compile(r'/dp/([B][A-Z0-9]{9})(?:/|\?|")', re.IGNORECASE),
         re.compile(r'"ASIN"\s*:\s*"([B][A-Z0-9]{9})"', re.IGNORECASE),
     ]
+    for pattern in all_asin_patterns:
+        for m in pattern.finditer(html):
+            asin = m.group(1).upper()
+            if len(asin) == 10 and asin not in products:
+                products[asin] = {'asin': asin, 'title': '', 'image': ''}
 
-    for pattern in patterns:
-        for match in pattern.finditer(html_content):
-            asin = match.group(1).upper()
-            if len(asin) == 10:
-                asins.add(asin)
+    # ── Clean up image URLs ──
+    for asin in products:
+        img = products[asin]['image']
+        if img:
+            # Get clean high-quality URL
+            img = img.split('._')[0] + '.jpg' if '._' in img else img
+            img = img.replace('\\/', '/')
+            products[asin]['image'] = img
 
-    return list(asins)
-
-
-# ─── PRICE EXTRACTOR ──────────────────────────────────────────────────────────
-def extract_price_from_title(title):
-    """Try to extract price from product title."""
-    # Look for patterns like ₹588, Rs.999, 588/-
-    patterns = [
-        r'₹\s*(\d+)',
-        r'Rs\.?\s*(\d+)',
-        r'(\d+)\s*/-',
-        r'(\d+)\s*rupees',
-    ]
-    for p in patterns:
-        m = re.search(p, title, re.IGNORECASE)
-        if m:
-            return int(m.group(1))
-    return None
+    return list(products.values())
 
 
 # ─── BOARD ROUTER ─────────────────────────────────────────────────────────────
-def assign_board(title, category, sub_category, keywords_str):
-    """Assign product to the correct Pinterest board."""
-    title_lower = title.lower()
-    keywords_lower = keywords_str.lower()
-    combined = title_lower + ' ' + keywords_lower
+def assign_board(title, keywords_str):
+    """Assign product to correct Pinterest board."""
+    combined = (title + ' ' + keywords_str).lower()
 
     for rule in BOARD_ROUTING:
-        # Skip default board for now
         if rule.get('default'):
             continue
 
-        # Check price threshold for Under ₹999 board
         if rule['board'] == 'Under \u20b9999 Fashion':
-            price = extract_price_from_title(title)
-            if price and price <= 999:
-                return rule['board']
-            # Also check price keywords
             for kw in rule.get('price_keywords', []):
                 if kw in combined:
                     return rule['board']
+            # Try price extraction
+            m = re.search(r'₹\s*(\d+)|rs\.?\s*(\d+)', combined)
+            if m:
+                price = int(m.group(1) or m.group(2))
+                if price <= rule['price_threshold']:
+                    return rule['board']
             continue
 
-        # Check keywords
         for kw in rule.get('keywords', []):
             if kw in combined:
                 return rule['board']
 
-    # Default to Fashion
     return 'Fashion'
 
 
-# ─── CATEGORY DETECTOR ────────────────────────────────────────────────────────
 def detect_category(title):
-    """Detect category and sub_category from product title."""
-    title_lower = title.lower()
+    """Detect category from title."""
+    t = title.lower()
     for keywords, category, sub_category in CATEGORY_RULES:
         for kw in keywords:
-            if kw in title_lower:
+            if kw in t:
                 return category, sub_category
     return 'fashion', 'clothing'
 
 
 def build_keywords(title):
-    """Build comma-separated keywords from title."""
-    stopwords = {'and', 'the', 'for', 'with', 'set', 'pack', 'of', 'in',
-                 'to', 'by', 'from', 'a', 'an', 'on', 'at', 'is', 'are'}
+    """Build keywords from title."""
+    stopwords = {'and', 'the', 'for', 'with', 'set', 'pack', 'of',
+                 'in', 'to', 'by', 'from', 'a', 'an', 'on', 'at'}
     words = re.findall(r'[a-zA-Z]{3,}', title.lower())
-    words = [w for w in words if w not in stopwords]
     seen, unique = set(), []
     for w in words:
-        if w not in seen:
+        if w not in stopwords and w not in seen:
             seen.add(w)
             unique.append(w)
     return ','.join(unique[:5])
 
 
 # ─── GOOGLE SHEETS ────────────────────────────────────────────────────────────
-def get_existing_asins(sheet_id, creds_json):
-    """Fetch existing ASINs from Google Sheet."""
+def get_sheet(sheet_id, creds_json):
+    """Connect to Google Sheet."""
     try:
         import gspread
         from google.oauth2.service_account import Credentials
-
         creds_dict = json.loads(creds_json)
         scopes = ['https://spreadsheets.google.com/feeds',
                   'https://www.googleapis.com/auth/drive']
@@ -294,37 +279,22 @@ def get_existing_asins(sheet_id, creds_json):
         client = gspread.authorize(creds)
         sheet = client.open_by_key(sheet_id)
         worksheet = sheet.worksheet('Sheet1')
-        existing = worksheet.col_values(1)
-        existing_set = set(
-            v.strip().upper() for v in existing[1:] if v.strip())
-        print(f'📋 Found {len(existing_set)} existing ASINs in sheet')
-        return existing_set, worksheet
-    except ImportError:
-        print('⚠️  Run: pip install gspread google-auth')
-        return set(), None
+        existing = set(
+            v.strip().upper()
+            for v in worksheet.col_values(1)[1:]
+            if v.strip()
+        )
+        print(f'📋 Found {len(existing)} existing ASINs in sheet')
+        return existing, worksheet
     except Exception as e:
-        print(f'❌ Google Sheets error: {e}')
+        print(f'❌ Sheet error: {e}')
         return set(), None
-
-
-def append_to_sheet(worksheet, rows):
-    """Append new rows to Google Sheet."""
-    try:
-        worksheet.append_rows(rows)
-        print(f'✅ Added {len(rows)} new products to Google Sheet')
-        return True
-    except Exception as e:
-        print(f'❌ Failed to append: {e}')
-        return False
 
 
 # ─── MAIN ─────────────────────────────────────────────────────────────────────
 def main():
-    parser = argparse.ArgumentParser(
-        description='Amazon Page Source → Google Sheets Importer v2'
-    )
-    parser.add_argument('--source', required=True,
-                        help='Path to Amazon page source HTML')
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--source', required=True)
     parser.add_argument('--sheet-id',
                         default=os.environ.get('GOOGLE_SHEET_ID', ''))
     parser.add_argument('--dry-run', action='store_true')
@@ -332,12 +302,11 @@ def main():
     args = parser.parse_args()
 
     print('=' * 60)
-    print('🤖 AMAZON IMPORTER v2 — with Image URLs + Board Routing')
+    print('🤖 AMAZON IMPORTER v3 — Bestsellers Optimized')
     print(f'   Source: {args.source}')
     print(f'   Dry run: {args.dry_run}')
     print('=' * 60)
 
-    # Read source
     try:
         with open(args.source, 'r', encoding='utf-8', errors='ignore') as f:
             html = f.read()
@@ -346,111 +315,101 @@ def main():
         print(f'❌ File not found: {args.source}')
         sys.exit(1)
 
-    # Extract ASINs
-    print('\n🔍 Extracting ASINs...')
-    asins = extract_asins_from_html(html)
-    print(f'   Found {len(asins)} unique ASINs')
+    print('\n🔍 Extracting products...')
+    raw = extract_products_from_html(html)
+    print(f'   Found {len(raw)} unique ASINs')
 
-    if not asins:
-        print('⚠️  No ASINs found. Is this a valid Amazon page source?')
-        sys.exit(1)
-
-    # Get existing ASINs
+    # Get existing
     existing_asins = set()
     worksheet = None
     if not args.dry_run and args.sheet_id:
-        creds_json = os.environ.get('GOOGLE_SHEETS_CREDENTIALS', '')
-        if creds_json:
-            existing_asins, worksheet = get_existing_asins(
-                args.sheet_id, creds_json)
+        creds = os.environ.get('GOOGLE_SHEETS_CREDENTIALS', '')
+        if creds:
+            existing_asins, worksheet = get_sheet(args.sheet_id, creds)
 
-    # Process each ASIN
-    print('\n🔄 Processing products...')
+    # Process
     new_products = []
     skipped = 0
     no_image = 0
+    no_title = 0
 
-    for asin in asins:
+    for p in raw:
+        asin = p['asin'].upper()
         if asin in existing_asins:
             skipped += 1
             continue
 
-        # Extract title and image
-        title = extract_title_for_asin(html, asin)
-        image_url = extract_image_for_asin(html, asin)
+        title = p.get('title', '').strip()
+        image = p.get('image', '').strip()
 
         if not title:
             title = f'Amazon Fashion Product {asin}'
-
-        if not image_url:
+            no_title += 1
+        if not image:
             no_image += 1
 
-        # Detect category
         category, sub_category = detect_category(title)
         keywords = build_keywords(title)
+        board = assign_board(title, keywords)
 
-        # Assign board
-        board_name = assign_board(title, category, sub_category, keywords)
-
-        product = {
+        new_products.append({
             'asin': asin,
-            'product_title': title,
+            'product_title': title[:100],
             'category': category,
             'sub_category': sub_category,
             'keywords': keywords,
             'posted': 'NO',
             'last_posted': '',
             'pin_id': '',
-            'image_url': image_url,
-            'board_name': board_name
-        }
-        new_products.append(product)
+            'image_url': image,
+            'board_name': board
+        })
 
     # Summary
     print(f'\n📊 RESULTS')
-    print(f'   Total ASINs found:    {len(asins)}')
-    print(f'   Duplicates skipped:   {skipped}')
-    print(f'   New products:         {len(new_products)}')
-    print(f'   Missing image URL:    {no_image}')
+    print(f'   Total found:        {len(raw)}')
+    print(f'   Duplicates skipped: {skipped}')
+    print(f'   New products:       {len(new_products)}')
+    print(f'   Missing image:      {no_image}')
+    print(f'   Missing title:      {no_title}')
 
     if not new_products:
-        print('\n✅ No new products — all already in sheet!')
+        print('\n✅ Nothing new to import!')
         return
 
-    # Board breakdown
-    from collections import Counter
     boards = Counter(p['board_name'] for p in new_products)
     print('\n   By board:')
     for board, count in sorted(boards.items()):
         imgs = sum(1 for p in new_products
                    if p['board_name'] == board and p['image_url'])
-        print(f'     {board:<30} {count} products '
-              f'({imgs} with images)')
+        print(f'     {board:<32} {count:>3} products  '
+              f'({imgs} with images ✅)')
 
-    # Preview
-    print('\n📋 Preview (first 5):')
-    for p in new_products[:5]:
-        img = '✅' if p['image_url'] else '❌'
-        print(f'   {p["asin"]} | {p["board_name"]:<25} | '
-              f'img:{img} | {p["product_title"][:40]}')
+    print('\n📋 Preview (first 5 with images):')
+    shown = 0
+    for p in new_products:
+        if p['image_url'] and shown < 5:
+            print(f'   {p["asin"]} | {p["board_name"]:<25} | '
+                  f'{p["product_title"][:45]}')
+            shown += 1
 
     if args.dry_run:
-        print('\n🧪 DRY RUN — nothing written')
+        print('\n🧪 DRY RUN — nothing written to sheet')
         return
 
-    # Write to sheet
     if worksheet:
         print('\n📝 Writing to Google Sheet...')
-        rows = [
-            [p['asin'], p['product_title'], p['category'],
-             p['sub_category'], p['keywords'], p['posted'],
-             p['last_posted'], p['pin_id'], p['image_url'],
-             p['board_name']]
-            for p in new_products
-        ]
-        append_to_sheet(worksheet, rows)
+        rows = [[
+            p['asin'], p['product_title'], p['category'],
+            p['sub_category'], p['keywords'], p['posted'],
+            p['last_posted'], p['pin_id'], p['image_url'],
+            p['board_name']
+        ] for p in new_products]
+        worksheet.append_rows(rows)
+        print(f'✅ Added {len(rows)} products to Google Sheet!')
+    else:
+        print('⚠️  No sheet connection — dry run data only')
 
-    print('\n✅ IMPORT COMPLETE!')
     print('=' * 60)
 
 
