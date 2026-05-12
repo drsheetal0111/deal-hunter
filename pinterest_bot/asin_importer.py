@@ -63,6 +63,17 @@ BOARD_ROUTING = [
     }
 ]
 
+
+# ─── BOARD ID MAPPING ─────────────────────────────────────────────────────────
+BOARD_IDS = {
+    "Fashion":                 "454722962316119111",
+    "Jewelry Aesthetic":       "454722962316119578",
+    "Saree Look Ideas":        "454722962316120062",
+    "Ethnic Outfits":          "454722962316120063",
+    "Under \u20b9999 Fashion": "454722962316120064",
+    "Daily Wear Outfit Ideas": "454722962316120065"
+}
+
 CATEGORY_RULES = [
     (['saree', 'sari', 'chanderi', 'banarasi', 'dupatta', 'blouse'],
      'fashion', 'sarees'),
@@ -363,6 +374,7 @@ def main():
         keywords = build_keywords(title)
         board = assign_board(title, keywords)
 
+        board_id = BOARD_IDS.get(board, '454722962316119111')
         new_products.append({
             'asin': asin,
             'product_title': title[:100],
@@ -373,7 +385,8 @@ def main():
             'last_posted': '',
             'pin_id': '',
             'image_url': image,
-            'board_name': board
+            'board_name': board,
+            'board_id': board_id
         })
 
     # Summary
@@ -414,7 +427,7 @@ def main():
             p['asin'], p['product_title'], p['category'],
             p['sub_category'], p['keywords'], p['posted'],
             p['last_posted'], p['pin_id'], p['image_url'],
-            p['board_name']
+            p['board_name'], p['board_id']
         ] for p in new_products]
         worksheet.append_rows(rows)
         print(f'✅ Added {len(rows)} products to Google Sheet!')
