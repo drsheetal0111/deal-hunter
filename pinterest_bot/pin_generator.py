@@ -118,8 +118,7 @@ def generate_dalle_image(prompt):
         'prompt': prompt,
         'n': 1,
         'size': '1024x1024',
-        'quality': 'standard',
-        'response_format': 'url'
+        'quality': 'standard'
     }
 
     try:
