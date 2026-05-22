@@ -18,7 +18,7 @@ on:
         required: false
         default: ''
       occasion:
-        description: 'Occasion (Wedding, Festive etc)'
+        description: 'Occasion'
         required: false
         default: 'Festive & Casual'
       fabric:
@@ -28,11 +28,17 @@ on:
       colors:
         description: 'Product colors'
         required: false
-        default: 'Beautiful Colors'
+        default: ''
+      image_url:
+        description: 'Product image URL'
+        required: false
+        default: ''
 
 jobs:
   generate:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -42,9 +48,14 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install dependencies
+      - name: Install system fonts
         run: |
-          pip install Pillow requests cloudinary
+          sudo apt-get update -qq
+          sudo apt-get install -y fonts-dejavu-core fonts-liberation
+
+      - name: Install Python dependencies
+        run: |
+          pip install Pillow requests cloudinary numpy
 
       - name: Generate pin
         env:
@@ -52,6 +63,7 @@ jobs:
           CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
           CLOUDINARY_API_KEY: ${{ secrets.CLOUDINARY_API_KEY }}
           CLOUDINARY_API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET }}
+          AMAZON_AFFILIATE_TAG: ${{ secrets.AMAZON_AFFILIATE_TAG }}
         run: |
           python pinterest_bot/pin_generator.py \
             --asin "${{ github.event.inputs.asin }}" \
@@ -61,12 +73,13 @@ jobs:
             --occasion "${{ github.event.inputs.occasion }}" \
             --fabric "${{ github.event.inputs.fabric }}" \
             --colors "${{ github.event.inputs.colors }}" \
+            --image-url "${{ github.event.inputs.image_url }}" \
             --output "pin_${{ github.event.inputs.asin }}.jpg"
 
-      - name: Save pin URL
+      - name: Show pin URL
         run: cat pin_url.txt
 
-      - name: Upload pin as artifact
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: pin-${{ github.event.inputs.asin }}
@@ -74,16 +87,12 @@ jobs:
             pin_${{ github.event.inputs.asin }}.jpg
             pin_url.txt
 
-      - name: Copy pin to pages
+      - name: Commit pin to repo
         run: |
           mkdir -p pins
           cp pin_${{ github.event.inputs.asin }}.jpg pins/
-          echo "Pin copied to pages folder"
-
-      - name: Commit pin to GitHub Pages
-        run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add pins/
-          git diff --staged --quiet || git commit -m "Add pin for ${{ github.event.inputs.asin }}"
+          git diff --staged --quiet || git commit -m "Add pin ${{ github.event.inputs.asin }}"
           git push
