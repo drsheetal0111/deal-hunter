@@ -1,0 +1,89 @@
+name: Generate Pinterest Pin
+
+on:
+  workflow_dispatch:
+    inputs:
+      asin:
+        description: 'Product ASIN'
+        required: true
+      title:
+        description: 'Product title'
+        required: true
+      category:
+        description: 'Product category'
+        required: false
+        default: 'fashion'
+      keywords:
+        description: 'Product keywords'
+        required: false
+        default: ''
+      occasion:
+        description: 'Occasion (Wedding, Festive etc)'
+        required: false
+        default: 'Festive & Casual'
+      fabric:
+        description: 'Fabric type'
+        required: false
+        default: 'Premium Fabric'
+      colors:
+        description: 'Product colors'
+        required: false
+        default: 'Beautiful Colors'
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install Pillow requests cloudinary
+
+      - name: Generate pin
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
+          CLOUDINARY_API_KEY: ${{ secrets.CLOUDINARY_API_KEY }}
+          CLOUDINARY_API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET }}
+        run: |
+          python pinterest_bot/pin_generator.py \
+            --asin "${{ github.event.inputs.asin }}" \
+            --title "${{ github.event.inputs.title }}" \
+            --category "${{ github.event.inputs.category }}" \
+            --keywords "${{ github.event.inputs.keywords }}" \
+            --occasion "${{ github.event.inputs.occasion }}" \
+            --fabric "${{ github.event.inputs.fabric }}" \
+            --colors "${{ github.event.inputs.colors }}" \
+            --output "pin_${{ github.event.inputs.asin }}.jpg"
+
+      - name: Save pin URL
+        run: cat pin_url.txt
+
+      - name: Upload pin as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pin-${{ github.event.inputs.asin }}
+          path: |
+            pin_${{ github.event.inputs.asin }}.jpg
+            pin_url.txt
+
+      - name: Copy pin to pages
+        run: |
+          mkdir -p pins
+          cp pin_${{ github.event.inputs.asin }}.jpg pins/
+          echo "Pin copied to pages folder"
+
+      - name: Commit pin to GitHub Pages
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add pins/
+          git diff --staged --quiet || git commit -m "Add pin for ${{ github.event.inputs.asin }}"
+          git push
